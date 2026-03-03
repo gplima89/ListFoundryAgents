@@ -1,2 +1,115 @@
 # ListFoundryAgents
-    Queries Azure Resource Graph to discover AI Foundry projects, then calls each     project's data plane API to list agents. Supports querying all projects across     all subscriptions or filtering by a specific project resource ID
+
+A PowerShell script that discovers all Azure AI Foundry projects across your tenant using Azure Resource Graph (KQL) and lists the agents (assistants) deployed in each project via the AI Foundry data plane API.
+
+## Objectives
+
+- **Discover** all AI Foundry projects across all subscriptions without being limited to a single subscription scope.
+- **List agents** (assistants) deployed in each project, including their name, ID, and model.
+- **Export results** to CSV for reporting, auditing, or inventory purposes.
+- **Filter** by a specific AI Foundry account to scope the query to a subset of projects.
+
+## Prerequisites
+
+- **Azure subscription** with access to AI Foundry projects.
+- **PowerShell 5.1+** (Windows PowerShell) or **PowerShell 7+** (cross-platform).
+- **Azure PowerShell modules**:
+  - `Az.Accounts` — for authentication (`Connect-AzAccount`, `Get-AzAccessToken`).
+  - `Az.ResourceGraph` — for cross-subscription resource discovery (`Search-AzGraph`).
+- **Permissions**:
+  - The signed-in user must have **Reader** access to the subscriptions containing AI Foundry resources (for Resource Graph queries).
+  - The signed-in user must have **Azure AI User** (or equivalent) role on the AI Foundry projects to call the data plane API.
+
+## Environment Setup
+
+### 1. Install required PowerShell modules
+
+```powershell
+Install-Module -Name Az.Accounts, Az.ResourceGraph -Scope CurrentUser
+```
+
+### 2. Authenticate to Azure
+
+```powershell
+Connect-AzAccount
+```
+
+> **Note:** The script automatically checks if you're already authenticated and only prompts for login if needed.
+
+## Usage
+
+### List agents across all AI Foundry projects
+
+```powershell
+.\ListFoundryAgents.ps1
+```
+
+### List agents for projects under a specific AI Foundry account
+
+```powershell
+.\ListFoundryAgents.ps1 -ProjectId "/subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<account-name>"
+```
+
+### Export results to CSV
+
+```powershell
+.\ListFoundryAgents.ps1 -ExportCsv ".\agents.csv"
+```
+
+### Combine parameters
+
+```powershell
+.\ListFoundryAgents.ps1 -ProjectId "/subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<account-name>" -ExportCsv ".\agents.csv"
+```
+
+## Parameters
+
+| Parameter    | Required | Description |
+|-------------|----------|-------------|
+| `ProjectId` | No       | The full Azure resource ID of an AI Foundry account (hub). When provided, only projects under this account are queried. If omitted, all projects across all subscriptions are queried. |
+| `ExportCsv` | No       | Path to a CSV file. When provided, all discovered agents are exported to this file. |
+
+## Output
+
+### Console output
+
+```
+Project: my-foundry-project
+  Agent: MyAgent
+  ID:    asst_abc123def456
+  Model: gpt-4.1
+```
+
+### CSV columns
+
+| Column         | Description |
+|---------------|-------------|
+| `Project`      | Name of the AI Foundry project |
+| `ResourceGroup`| Azure resource group containing the project |
+| `AgentName`    | Name of the agent |
+| `AgentId`      | Unique identifier of the agent |
+| `Model`        | Model deployment used by the agent |
+| `CreatedAt`    | Unix timestamp of when the agent was created |
+| `Instructions` | System instructions configured for the agent |
+
+## How It Works
+
+1. **Authentication** — Checks for an existing Azure context; prompts login if not authenticated.
+2. **Module validation** — Verifies that `Az.Accounts` and `Az.ResourceGraph` are installed.
+3. **Project discovery** — Uses `Search-AzGraph` with KQL to find all `Microsoft.CognitiveServices/accounts/projects` resources, including their data plane endpoints.
+4. **Token acquisition** — Obtains a bearer token for the `https://ai.azure.com` audience.
+5. **Agent enumeration** — For each project, calls `GET {endpoint}/assistants?api-version=2025-05-15-preview` on the project's data plane endpoint.
+6. **Output** — Displays results in the console and optionally exports to CSV.
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| `No projects found` | Verify you have Reader access to subscriptions with AI Foundry resources. |
+| `401 Unauthorized` | Ensure you have the **Azure AI User** role on the project. Re-authenticate with `Connect-AzAccount`. |
+| `No data plane endpoint found` | The project may not have been fully provisioned. Check the project in the Azure portal. |
+| Missing modules error | Run `Install-Module -Name Az.Accounts, Az.ResourceGraph -Scope CurrentUser`. |
+
+## License
+
+This project is provided as-is with no warranty. Use at your own risk.
