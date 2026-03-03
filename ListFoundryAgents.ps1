@@ -65,7 +65,7 @@ try {
 # Get AI Foundry projects
 if ($ProjectId) {
     # Filter projects under a specific AI Foundry account (hub)
-    $query = "resources | where type =~ 'Microsoft.CognitiveServices/accounts/projects' and id startswith '$ProjectId' | project name, id, resourceGroup, properties"
+    $query = "resources | where type =~ 'Microsoft.CognitiveServices/accounts/projects' and id startswith '$ProjectId' | project name, id, subscriptionId, resourceGroup, properties"
     $projects = Search-AzGraph -Query $query -First 1000
     if (-not $projects) {
         Write-Output "No projects found under: $ProjectId"
@@ -73,7 +73,7 @@ if ($ProjectId) {
     }
 } else {
     # Get all AI Foundry projects across all subscriptions
-    $query = "resources | where type =~ 'Microsoft.CognitiveServices/accounts/projects' | project name, id, resourceGroup, properties"
+    $query = "resources | where type =~ 'Microsoft.CognitiveServices/accounts/projects' | project name, id, subscriptionId, resourceGroup, properties"
     $projects = Search-AzGraph -Query $query -First 1000
     if (-not $projects) {
         Write-Output "No projects found."
@@ -90,6 +90,10 @@ $allAgents = @()
 
 foreach ($project in $projects) {
     Write-Host "Project: $($project.name)" -ForegroundColor Cyan
+    Write-Host "  Subscription: $($project.subscriptionId)" -ForegroundColor Gray
+    Write-Host "  Resource Group: $($project.resourceGroup)" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  Printing agents..." -ForegroundColor Green
 
     # Get the data plane endpoint from the project properties
     $endpoint = $project.properties.endpoints.'AI Foundry API'
@@ -116,13 +120,14 @@ foreach ($project in $projects) {
                 Write-Host ""
 
                 $allAgents += [PSCustomObject]@{
-                    Project       = $project.name
-                    ResourceGroup = $project.resourceGroup
-                    AgentName     = $agent.name
-                    AgentId       = $agent.id
-                    Model         = $agent.model
-                    CreatedAt     = $agent.created_at
-                    Instructions  = $agent.instructions
+                    SubscriptionId = $project.subscriptionId
+                    Project        = $project.name
+                    ResourceGroup  = $project.resourceGroup
+                    AgentName      = $agent.name
+                    AgentId        = $agent.id
+                    Model          = $agent.model
+                    CreatedAt      = $agent.created_at
+                    Instructions   = $agent.instructions
                 }
             }
         } else {
