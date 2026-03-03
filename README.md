@@ -87,8 +87,11 @@ Project: my-foundry-project
   Published Agent Applications:
     Application: my-published-app
     Agent(s):    MyAgent
-    Deployment:  prod-deployment (Managed, State: Running)
-    Version(s):  MyAgent v1
+    Created:     2025-10-15T08:30:00Z
+      Deployment:  prod-deployment
+        Type:      Managed
+        State:     Running
+        Agent(s):  MyAgent v1
 ```
 
 ### CSV columns
@@ -101,8 +104,12 @@ Project: my-foundry-project
 | `AgentName`      | Name of the agent |
 | `AgentId`        | Unique identifier of the agent or application resource ID |
 | `Model`          | Model deployment used by the agent (empty for published apps) |
-| `Status`         | `Unpublished` (project-level assistant) or `Published` (Agent Application) |
-| `CreatedAt`      | Unix timestamp of when the agent was created (empty for published apps) |
+| `Status`         | `Unpublished`, `Published`, or `Published (no deployments)` |
+| `ApplicationName`| Name of the published Agent Application (empty for unpublished) |
+| `DeploymentName` | Name of the deployment (empty for unpublished or undeployed apps) |
+| `DeploymentType` | Deployment type, e.g. `Managed` (empty for unpublished) |
+| `DeploymentState`| Deployment state, e.g. `Running` (empty for unpublished) |
+| `CreatedAt`      | Creation timestamp (Unix for unpublished, ISO 8601 for published) |
 | `Instructions`   | System instructions configured for the agent (empty for published apps) |
 
 ## How It Works
@@ -112,8 +119,8 @@ Project: my-foundry-project
 3. **Project discovery** — Uses `Search-AzGraph` with KQL to find all `Microsoft.CognitiveServices/accounts/projects` resources, including their data plane endpoints.
 4. **Token acquisition** — Obtains bearer tokens for both the data plane (`https://ai.azure.com`) and ARM (`https://management.azure.com`).
 5. **Unpublished agent enumeration** — For each project, calls `GET {endpoint}/assistants?api-version=2025-05-15-preview` on the project's data plane endpoint.
-6. **Published agent enumeration** — For each project, calls the ARM API to list Agent Applications (`GET .../applications`) and their deployments (`GET .../agentdeployments`).
-7. **Output** — Displays results in the console and optionally exports to CSV.
+6. **Published agent enumeration** — For each project, calls the ARM API to list Agent Applications (`GET .../applications`) and their deployments (`GET .../agentdeployments`). Automatically tries multiple API versions for compatibility.
+7. **Output** — Displays results in the console and optionally exports to CSV. Published apps produce one CSV row per deployment for granularity.
 
 ## Troubleshooting
 

@@ -123,15 +123,19 @@ foreach ($project in $projects) {
                 Write-Host ""
 
                 $allAgents += [PSCustomObject]@{
-                    SubscriptionId = $project.subscriptionId
-                    Project        = $project.name
-                    ResourceGroup  = $project.resourceGroup
-                    AgentName      = $agent.name
-                    AgentId        = $agent.id
-                    Model          = $agent.model
-                    Status         = "Unpublished"
-                    CreatedAt      = $agent.created_at
-                    Instructions   = $agent.instructions
+                    SubscriptionId  = $project.subscriptionId
+                    Project         = $project.name
+                    ResourceGroup   = $project.resourceGroup
+                    AgentName       = $agent.name
+                    AgentId         = $agent.id
+                    Model           = $agent.model
+                    Status          = "Unpublished"
+                    ApplicationName = ''
+                    DeploymentName  = ''
+                    DeploymentType  = ''
+                    DeploymentState = ''
+                    CreatedAt       = $agent.created_at
+                    Instructions    = $agent.instructions
                 }
             }
         } else {
@@ -146,57 +150,99 @@ foreach ($project in $projects) {
 
     # List published Agent Applications (ARM API)
     Write-Host "  Published Agent Applications:" -ForegroundColor Green
-    $appsUrl = "https://management.azure.com$($project.id)/applications?api-version=2025-12-01"
-    try {
-        $appsResponse = Invoke-RestMethod -Method GET -Uri $appsUrl -Headers @{
-            Authorization = "Bearer $armTokenPlain"
+    $armApiVersions = @('2025-12-01', '2025-04-01-preview', '2024-10-01-preview')
+    $appsResponse = $null
+    foreach ($armApiVer in $armApiVersions) {
+        $appsUrl = "https://management.azure.com$($project.id)/applications?api-version=$armApiVer"
+        try {
+            $appsResponse = Invoke-RestMethod -Method GET -Uri $appsUrl -Headers @{
+                Authorization = "Bearer $armTokenPlain"
+            }
+            break  # success — stop trying versions
+        } catch {
+            $statusCode = $_.Exception.Response.StatusCode.value__
+            if ($statusCode -eq 400 -or $statusCode -eq 404) {
+                continue   # API version not supported, try next
+            }
+            Write-Host "    Error listing applications: $($_.Exception.Message)" -ForegroundColor Yellow
+            break
         }
+    }
 
-        if ($appsResponse.value) {
-            foreach ($app in $appsResponse.value) {
-                $appName = $app.name
-                $agentNames = ($app.properties.agents | ForEach-Object { $_.agentName }) -join ', '
-                Write-Host "    Application: $appName"
-                Write-Host "    Agent(s):    $agentNames"
+    if ($appsResponse -and $appsResponse.value) {
+        foreach ($app in $appsResponse.value) {
+            $appName       = $app.name
+            $agentNames    = ($app.properties.agents | ForEach-Object { $_.agentName }) -join ', '
+            $appCreatedAt  = if ($app.systemData.createdAt) { $app.systemData.createdAt } else { '' }
+            Write-Host "    Application: $appName"
+            Write-Host "    Agent(s):    $agentNames"
+            Write-Host "    Created:     $appCreatedAt" -ForegroundColor Gray
 
-                # Get deployments for this application
-                $deploymentsUrl = "https://management.azure.com$($app.id)/agentdeployments?api-version=2025-12-01"
-                try {
-                    $deploymentsResponse = Invoke-RestMethod -Method GET -Uri $deploymentsUrl -Headers @{
-                        Authorization = "Bearer $armTokenPlain"
-                    }
-                    if ($deploymentsResponse.value) {
-                        foreach ($deployment in $deploymentsResponse.value) {
-                            $deployName = $deployment.name
-                            $deployType = $deployment.properties.deploymentType
-                            $deployState = $deployment.properties.state
-                            $deployAgents = ($deployment.properties.agents | ForEach-Object { "$($_.agentName) v$($_.agentVersion)" }) -join ', '
-                            Write-Host "    Deployment:  $deployName ($deployType, State: $deployState)"
-                            Write-Host "    Version(s):  $deployAgents"
+            # Get deployments for this application
+            $deploymentsUrl = "https://management.azure.com$($app.id)/agentdeployments?api-version=$armApiVer"
+            $hasDeployments = $false
+            try {
+                $deploymentsResponse = Invoke-RestMethod -Method GET -Uri $deploymentsUrl -Headers @{
+                    Authorization = "Bearer $armTokenPlain"
+                }
+                if ($deploymentsResponse.value) {
+                    $hasDeployments = $true
+                    foreach ($deployment in $deploymentsResponse.value) {
+                        $deployName   = $deployment.name
+                        $deployType   = $deployment.properties.deploymentType
+                        $deployState  = $deployment.properties.state
+                        $deployAgents = ($deployment.properties.agents | ForEach-Object { "$($_.agentName) v$($_.agentVersion)" }) -join ', '
+                        Write-Host "      Deployment:  $deployName" -ForegroundColor White
+                        Write-Host "        Type:      $deployType"
+                        Write-Host "        State:     $deployState"
+                        Write-Host "        Agent(s):  $deployAgents"
+
+                        # One CSV row per deployment for granularity
+                        $allAgents += [PSCustomObject]@{
+                            SubscriptionId  = $project.subscriptionId
+                            Project         = $project.name
+                            ResourceGroup   = $project.resourceGroup
+                            AgentName       = $agentNames
+                            AgentId         = $app.id
+                            Model           = ''
+                            Status          = "Published"
+                            ApplicationName = $appName
+                            DeploymentName  = $deployName
+                            DeploymentType  = $deployType
+                            DeploymentState = $deployState
+                            CreatedAt       = $appCreatedAt
+                            Instructions    = ''
                         }
                     }
-                } catch {
-                    Write-Host "    Could not retrieve deployments." -ForegroundColor Yellow
                 }
-                Write-Host ""
+            } catch {
+                Write-Host "      Could not retrieve deployments." -ForegroundColor Yellow
+            }
 
+            # If no deployments, still record the application
+            if (-not $hasDeployments) {
                 $allAgents += [PSCustomObject]@{
-                    SubscriptionId = $project.subscriptionId
-                    Project        = $project.name
-                    ResourceGroup  = $project.resourceGroup
-                    AgentName      = $agentNames
-                    AgentId        = $app.id
-                    Model          = ''
-                    Status         = "Published"
-                    CreatedAt      = ''
-                    Instructions   = ''
+                    SubscriptionId  = $project.subscriptionId
+                    Project         = $project.name
+                    ResourceGroup   = $project.resourceGroup
+                    AgentName       = $agentNames
+                    AgentId         = $app.id
+                    Model           = ''
+                    Status          = "Published (no deployments)"
+                    ApplicationName = $appName
+                    DeploymentName  = ''
+                    DeploymentType  = ''
+                    DeploymentState = ''
+                    CreatedAt       = $appCreatedAt
+                    Instructions    = ''
                 }
             }
-        } else {
-            Write-Host "    No published applications found." -ForegroundColor DarkGray
+            Write-Host ""
         }
-    } catch {
-        Write-Host "    Error listing applications: $($_.Exception.Message)" -ForegroundColor Yellow
+    } elseif (-not $appsResponse) {
+        Write-Host "    Applications API not available for this project." -ForegroundColor DarkGray
+    } else {
+        Write-Host "    No published applications found." -ForegroundColor DarkGray
     }
 }
 
