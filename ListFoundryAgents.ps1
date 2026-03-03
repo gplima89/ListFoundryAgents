@@ -150,7 +150,7 @@ foreach ($project in $projects) {
 
     # List published Agent Applications (ARM API)
     Write-Host "  Published Agent Applications:" -ForegroundColor Green
-    $armApiVersions = @('2025-12-01', '2025-04-01-preview', '2024-10-01-preview')
+    $armApiVersions = @('2025-10-01-preview', '2025-12-01', '2025-04-01-preview')
     $appsResponse = $null
     foreach ($armApiVer in $armApiVersions) {
         $appsUrl = "https://management.azure.com$($project.id)/applications?api-version=$armApiVer"
