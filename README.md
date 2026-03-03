@@ -131,6 +131,30 @@ Project: my-foundry-project
 | `No data plane endpoint found` | The project may not have been fully provisioned. Check the project in the Azure portal. |
 | Missing modules error | Run `Install-Module -Name Az.Accounts, Az.ResourceGraph -Scope CurrentUser`. |
 
+## References & Documentation
+
+### Azure AI Foundry
+
+- [Azure AI Foundry documentation](https://learn.microsoft.com/azure/ai-foundry/)
+- [Azure AI Agent Service overview](https://learn.microsoft.com/azure/ai-services/agents/overview)
+- [Publish agents as Agent Applications](https://learn.microsoft.com/azure/ai-services/agents/how-to/publish-agent-application)
+
+### APIs used in this script
+
+- **Data plane — List Assistants**: [`GET {endpoint}/assistants?api-version=2025-05-15-preview`](https://learn.microsoft.com/rest/api/azureai/assistants/list-assistants)
+- **ARM — Agent Applications**: [`GET .../projects/{project}/applications`](https://learn.microsoft.com/rest/api/azureai/agent-applications) — lists published Agent Applications and their deployments via Azure Resource Manager.
+- **Azure Resource Graph**: [`Search-AzGraph`](https://learn.microsoft.com/powershell/module/az.resourcegraph/search-azgraph) — cross-subscription KQL queries against Azure Resource Manager.
+
+### Azure PowerShell modules
+
+- [`Az.Accounts`](https://learn.microsoft.com/powershell/module/az.accounts/) — authentication and token acquisition (`Connect-AzAccount`, `Get-AzAccessToken`).
+- [`Az.ResourceGraph`](https://learn.microsoft.com/powershell/module/az.resourcegraph/) — Azure Resource Graph queries.
+
+### Authentication & permissions
+
+- [Azure RBAC built-in roles](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles)
+- [Azure AI services RBAC roles](https://learn.microsoft.com/azure/ai-services/authentication#authorize-access-to-managed-identities)
+
 ## License
 
 This project is provided as-is with no warranty. Use at your own risk.
