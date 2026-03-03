@@ -135,14 +135,14 @@ Project: my-foundry-project
 
 ### Azure AI Foundry
 
-- [Azure AI Foundry documentation](https://learn.microsoft.com/azure/ai-foundry/)
-- [Azure AI Agent Service overview](https://learn.microsoft.com/azure/ai-services/agents/overview)
-- [Publish agents as Agent Applications](https://learn.microsoft.com/azure/ai-services/agents/how-to/publish-agent-application)
+- [Microsoft Foundry documentation](https://learn.microsoft.com/azure/foundry/)
+- [What is Foundry Agent Service?](https://learn.microsoft.com/azure/foundry/agents/overview)
+- [Publish and share agents in Microsoft Foundry](https://learn.microsoft.com/azure/foundry/agents/how-to/publish-agent)
 
 ### APIs used in this script
 
-- **Data plane — List Assistants**: [`GET {endpoint}/assistants?api-version=2025-05-15-preview`](https://learn.microsoft.com/rest/api/azureai/assistants/list-assistants)
-- **ARM — Agent Applications**: [`GET .../projects/{project}/applications`](https://learn.microsoft.com/rest/api/azureai/agent-applications) — lists published Agent Applications and their deployments via Azure Resource Manager.
+- **Data plane — List Assistants**: `GET {endpoint}/assistants?api-version=2025-05-15-preview` — lists unpublished agents (assistants) in a project via the data plane endpoint.
+- **ARM — Agent Applications**: [`Microsoft.CognitiveServices/accounts/projects/applications`](https://learn.microsoft.com/azure/templates/microsoft.cognitiveservices/accounts/projects/applications) — lists published Agent Applications and their deployments via Azure Resource Manager.
 - **Azure Resource Graph**: [`Search-AzGraph`](https://learn.microsoft.com/powershell/module/az.resourcegraph/search-azgraph) — cross-subscription KQL queries against Azure Resource Manager.
 
 ### Azure PowerShell modules
@@ -153,7 +153,7 @@ Project: my-foundry-project
 ### Authentication & permissions
 
 - [Azure RBAC built-in roles](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles)
-- [Azure AI services RBAC roles](https://learn.microsoft.com/azure/ai-services/authentication#authorize-access-to-managed-identities)
+- [Azure AI services RBAC roles](https://learn.microsoft.com/en-us/azure/foundry/concepts/rbac-foundry)
 
 ## License
 
