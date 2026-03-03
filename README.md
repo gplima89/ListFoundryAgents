@@ -145,6 +145,11 @@ Project: my-foundry-project
 - **ARM — Agent Applications**: [`Microsoft.CognitiveServices/accounts/projects/applications`](https://learn.microsoft.com/azure/templates/microsoft.cognitiveservices/accounts/projects/applications) — lists published Agent Applications and their deployments via Azure Resource Manager.
 - **Azure Resource Graph**: [`Search-AzGraph`](https://learn.microsoft.com/powershell/module/az.resourcegraph/search-azgraph) — cross-subscription KQL queries against Azure Resource Manager.
 
+### REST API references
+
+- [Agents — List Agents (AI Project data plane)](https://learn.microsoft.com/rest/api/aifoundry/aiproject#agents---list-agents) — data plane API for listing agents in a project.
+- [Agent Applications — List Agents (Account Management)](https://learn.microsoft.com/rest/api/aifoundry/accountmanagement/agent-applications/list-agents?view=rest-aifoundry-accountmanagement-2025-10-01-preview&tabs=HTTP) — ARM API for listing agents within a published Agent Application.
+
 ### Azure PowerShell modules
 
 - [`Az.Accounts`](https://learn.microsoft.com/powershell/module/az.accounts/) — authentication and token acquisition (`Connect-AzAccount`, `Get-AzAccessToken`).
