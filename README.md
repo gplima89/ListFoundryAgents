@@ -1,11 +1,12 @@
 # ListFoundryAgents
 
-A PowerShell script that discovers all Azure AI Foundry projects across your tenant using Azure Resource Graph (KQL) and lists the agents (assistants) deployed in each project via the AI Foundry data plane API.
+A PowerShell script that discovers all Azure AI Foundry projects across your tenant using Azure Resource Graph (KQL) and lists both **unpublished agents** (assistants) and **published Agent Applications** in each project.
 
 ## Objectives
 
 - **Discover** all AI Foundry projects across all subscriptions without being limited to a single subscription scope.
-- **List agents** (assistants) deployed in each project, including their name, ID, and model.
+- **List unpublished agents** (assistants) in each project, including their name, ID, and model.
+- **List published Agent Applications** and their deployments, including deployment type and state.
 - **Export results** to CSV for reporting, auditing, or inventory purposes.
 - **Filter** by a specific AI Foundry account to scope the query to a subset of projects.
 
@@ -75,31 +76,44 @@ Connect-AzAccount
 
 ```
 Project: my-foundry-project
+  Subscription: 12345678-1234-1234-1234-123456789abc
+  Resource Group: my-rg
+
+  Printing agents...
   Agent: MyAgent
   ID:    asst_abc123def456
   Model: gpt-4.1
+
+  Published Agent Applications:
+    Application: my-published-app
+    Agent(s):    MyAgent
+    Deployment:  prod-deployment (Managed, State: Running)
+    Version(s):  MyAgent v1
 ```
 
 ### CSV columns
 
-| Column         | Description |
-|---------------|-------------|
-| `Project`      | Name of the AI Foundry project |
-| `ResourceGroup`| Azure resource group containing the project |
-| `AgentName`    | Name of the agent |
-| `AgentId`      | Unique identifier of the agent |
-| `Model`        | Model deployment used by the agent |
-| `CreatedAt`    | Unix timestamp of when the agent was created |
-| `Instructions` | System instructions configured for the agent |
+| Column           | Description |
+|-----------------|-------------|
+| `SubscriptionId` | Azure subscription ID containing the project |
+| `Project`        | Name of the AI Foundry project |
+| `ResourceGroup`  | Azure resource group containing the project |
+| `AgentName`      | Name of the agent |
+| `AgentId`        | Unique identifier of the agent or application resource ID |
+| `Model`          | Model deployment used by the agent (empty for published apps) |
+| `Status`         | `Unpublished` (project-level assistant) or `Published` (Agent Application) |
+| `CreatedAt`      | Unix timestamp of when the agent was created (empty for published apps) |
+| `Instructions`   | System instructions configured for the agent (empty for published apps) |
 
 ## How It Works
 
 1. **Authentication** — Checks for an existing Azure context; prompts login if not authenticated.
 2. **Module validation** — Verifies that `Az.Accounts` and `Az.ResourceGraph` are installed.
 3. **Project discovery** — Uses `Search-AzGraph` with KQL to find all `Microsoft.CognitiveServices/accounts/projects` resources, including their data plane endpoints.
-4. **Token acquisition** — Obtains a bearer token for the `https://ai.azure.com` audience.
-5. **Agent enumeration** — For each project, calls `GET {endpoint}/assistants?api-version=2025-05-15-preview` on the project's data plane endpoint.
-6. **Output** — Displays results in the console and optionally exports to CSV.
+4. **Token acquisition** — Obtains bearer tokens for both the data plane (`https://ai.azure.com`) and ARM (`https://management.azure.com`).
+5. **Unpublished agent enumeration** — For each project, calls `GET {endpoint}/assistants?api-version=2025-05-15-preview` on the project's data plane endpoint.
+6. **Published agent enumeration** — For each project, calls the ARM API to list Agent Applications (`GET .../applications`) and their deployments (`GET .../agentdeployments`).
+7. **Output** — Displays results in the console and optionally exports to CSV.
 
 ## Troubleshooting
 

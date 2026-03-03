@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-    Lists all agents (assistants) across Azure AI Foundry projects.
+    Lists all agents (assistants) and published Agent Applications across Azure AI Foundry projects.
 
 .DESCRIPTION
     Queries Azure Resource Graph to discover AI Foundry projects, then calls each
-    project's data plane API to list agents. Supports querying all projects across
-    all subscriptions or filtering by a specific project resource ID.
+    project's data plane API to list unpublished agents (assistants) and uses the
+    ARM API to list published Agent Applications and their deployments.
 
 .PARAMETER ProjectId
     (Optional) The full Azure resource ID of a specific AI Foundry project.
@@ -81,9 +81,12 @@ if ($ProjectId) {
     }
 }
 
-# Get access token for the Cognitive Services data plane
+# Get access token for the data plane and ARM
 $token = (Get-AzAccessToken -ResourceUrl "https://ai.azure.com" -AsSecureString).Token
 $tokenPlain = [System.Net.NetworkCredential]::new('', $token).Password
+
+$armToken = (Get-AzAccessToken -ResourceUrl "https://management.azure.com/" -AsSecureString).Token
+$armTokenPlain = [System.Net.NetworkCredential]::new('', $armToken).Password
 
 # Collect results for CSV export
 $allAgents = @()
@@ -126,18 +129,74 @@ foreach ($project in $projects) {
                     AgentName      = $agent.name
                     AgentId        = $agent.id
                     Model          = $agent.model
+                    Status         = "Unpublished"
                     CreatedAt      = $agent.created_at
                     Instructions   = $agent.instructions
                 }
             }
         } else {
-            Write-Host "  No agents found."
+            Write-Host "  No agents found." -ForegroundColor DarkGray
         }
     } catch {
         Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Yellow
         if ($_.ErrorDetails.Message) {
             Write-Host "  Details: $($_.ErrorDetails.Message)" -ForegroundColor Yellow
         }
+    }
+
+    # List published Agent Applications (ARM API)
+    Write-Host "  Published Agent Applications:" -ForegroundColor Green
+    $appsUrl = "https://management.azure.com$($project.id)/applications?api-version=2025-12-01"
+    try {
+        $appsResponse = Invoke-RestMethod -Method GET -Uri $appsUrl -Headers @{
+            Authorization = "Bearer $armTokenPlain"
+        }
+
+        if ($appsResponse.value) {
+            foreach ($app in $appsResponse.value) {
+                $appName = $app.name
+                $agentNames = ($app.properties.agents | ForEach-Object { $_.agentName }) -join ', '
+                Write-Host "    Application: $appName"
+                Write-Host "    Agent(s):    $agentNames"
+
+                # Get deployments for this application
+                $deploymentsUrl = "https://management.azure.com$($app.id)/agentdeployments?api-version=2025-12-01"
+                try {
+                    $deploymentsResponse = Invoke-RestMethod -Method GET -Uri $deploymentsUrl -Headers @{
+                        Authorization = "Bearer $armTokenPlain"
+                    }
+                    if ($deploymentsResponse.value) {
+                        foreach ($deployment in $deploymentsResponse.value) {
+                            $deployName = $deployment.name
+                            $deployType = $deployment.properties.deploymentType
+                            $deployState = $deployment.properties.state
+                            $deployAgents = ($deployment.properties.agents | ForEach-Object { "$($_.agentName) v$($_.agentVersion)" }) -join ', '
+                            Write-Host "    Deployment:  $deployName ($deployType, State: $deployState)"
+                            Write-Host "    Version(s):  $deployAgents"
+                        }
+                    }
+                } catch {
+                    Write-Host "    Could not retrieve deployments." -ForegroundColor Yellow
+                }
+                Write-Host ""
+
+                $allAgents += [PSCustomObject]@{
+                    SubscriptionId = $project.subscriptionId
+                    Project        = $project.name
+                    ResourceGroup  = $project.resourceGroup
+                    AgentName      = $agentNames
+                    AgentId        = $app.id
+                    Model          = ''
+                    Status         = "Published"
+                    CreatedAt      = ''
+                    Instructions   = ''
+                }
+            }
+        } else {
+            Write-Host "    No published applications found." -ForegroundColor DarkGray
+        }
+    } catch {
+        Write-Host "    Error listing applications: $($_.Exception.Message)" -ForegroundColor Yellow
     }
 }
 
