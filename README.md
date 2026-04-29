@@ -5,18 +5,21 @@ A PowerShell script that discovers all Azure AI Foundry projects across your ten
 ## Objectives
 
 - **Discover** all AI Foundry projects across all subscriptions without being limited to a single subscription scope.
+- **Scale** to tenants with thousands of projects: results are paged through Azure Resource Graph in batches of 1000 (the per-page maximum) using `SkipToken` until everything is retrieved.
 - **List unpublished agents** (assistants) in each project, including their name, ID, and model.
 - **List published Agent Applications** and their deployments, including deployment type and state.
-- **Export results** to CSV for reporting, auditing, or inventory purposes.
+- **Export results** to CSV or to a styled Excel (.xlsx) workbook (with a Summary sheet, frozen/colored headers, auto-filter, and color-coded Status column) for reporting, auditing, or executive presentations.
+- **Timestamped output files** so previous exports are never overwritten (e.g., `agents-20260429-143645.xlsx`).
 - **Filter** by a specific AI Foundry account to scope the query to a subset of projects.
 
 ## Prerequisites
 
 - **Azure subscription** with access to AI Foundry projects.
 - **PowerShell 5.1+** (Windows PowerShell) or **PowerShell 7+** (cross-platform).
-- **Azure PowerShell modules**:
+- **PowerShell modules**:
   - `Az.Accounts` — for authentication (`Connect-AzAccount`, `Get-AzAccessToken`).
   - `Az.ResourceGraph` — for cross-subscription resource discovery (`Search-AzGraph`).
+  - `ImportExcel` — *required only when using `-ExportExcel`* for styled `.xlsx` output.
 - **Permissions**:
   - The signed-in user must have **Reader** access to the subscriptions containing AI Foundry resources (for Resource Graph queries).
   - The signed-in user must have **Azure AI User** (or equivalent) role on the AI Foundry projects to call the data plane API.
@@ -27,6 +30,9 @@ A PowerShell script that discovers all Azure AI Foundry projects across your ten
 
 ```powershell
 Install-Module -Name Az.Accounts, Az.ResourceGraph -Scope CurrentUser
+
+# Only needed if you plan to use -ExportExcel
+Install-Module -Name ImportExcel -Scope CurrentUser
 ```
 
 ### 2. Authenticate to Azure
@@ -57,18 +63,34 @@ Connect-AzAccount
 .\ListFoundryAgents.ps1 -ExportCsv ".\agents.csv"
 ```
 
+The actual file is written with a timestamp suffix to prevent overwrites, e.g. `.\agents-20260429-143645.csv`. The full resolved path is printed to the console.
+
+### Export results to a styled Excel workbook
+
+```powershell
+.\ListFoundryAgents.ps1 -ExportExcel ".\agents.xlsx"
+```
+
+Produces a presentation-ready `.xlsx` (timestamped, e.g. `agents-20260429-143645.xlsx`) containing two sheets:
+
+- **Summary** — totals (rows, unpublished agents, published deployments, distinct projects, distinct subscriptions) and the report timestamp, with a dark-blue title banner.
+- **Agents** — full dataset as an Excel table with frozen header row, auto-filter, banded rows, auto-sized columns, and conditional color-coding on the `Status` column (green = Published, amber = Published with no deployments, yellow = Unpublished). The `Instructions` column is wrapped and width-capped for readability.
+
 ### Combine parameters
 
 ```powershell
-.\ListFoundryAgents.ps1 -ProjectId "/subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<account-name>" -ExportCsv ".\agents.csv"
+.\ListFoundryAgents.ps1 -ProjectId "/subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<account-name>" -ExportExcel ".\agents.xlsx"
 ```
+
+You can pass `-ExportCsv` and `-ExportExcel` together to generate both formats in a single run.
 
 ## Parameters
 
-| Parameter    | Required | Description |
-|-------------|----------|-------------|
-| `ProjectId` | No       | The full Azure resource ID of an AI Foundry account (hub). When provided, only projects under this account are queried. If omitted, all projects across all subscriptions are queried. |
-| `ExportCsv` | No       | Path to a CSV file. When provided, all discovered agents are exported to this file. |
+| Parameter      | Required | Description |
+|---------------|----------|-------------|
+| `ProjectId`   | No       | The full Azure resource ID of an AI Foundry account (hub). When provided, only projects under this account are queried. If omitted, all projects across all subscriptions are queried. |
+| `ExportCsv`   | No       | Path to a CSV file. A timestamp (`-yyyyMMdd-HHmmss`) is automatically appended before the extension to prevent overwrites. |
+| `ExportExcel` | No       | Path to a styled `.xlsx` Excel workbook. Requires the `ImportExcel` module. A timestamp is appended before the extension to prevent overwrites. |
 
 ## Output
 
@@ -115,12 +137,12 @@ Project: my-foundry-project
 ## How It Works
 
 1. **Authentication** — Checks for an existing Azure context; prompts login if not authenticated.
-2. **Module validation** — Verifies that `Az.Accounts` and `Az.ResourceGraph` are installed.
-3. **Project discovery** — Uses `Search-AzGraph` with KQL to find all `Microsoft.CognitiveServices/accounts/projects` resources, including their data plane endpoints.
+2. **Module validation** — Verifies that `Az.Accounts` and `Az.ResourceGraph` are installed (and `ImportExcel` if `-ExportExcel` is used).
+3. **Project discovery (paged)** — Uses `Search-AzGraph` to first count all `Microsoft.CognitiveServices/accounts/projects` resources, then pages through results in batches of 1000 via `SkipToken` until every project is retrieved. Per-page progress is printed to the console.
 4. **Token acquisition** — Obtains bearer tokens for both the data plane (`https://ai.azure.com`) and ARM (`https://management.azure.com`).
 5. **Unpublished agent enumeration** — For each project, calls `GET {endpoint}/assistants?api-version=2025-05-15-preview` on the project's data plane endpoint.
 6. **Published agent enumeration** — For each project, calls the ARM API to list Agent Applications (`GET .../applications`) and their deployments (`GET .../agentdeployments`). Automatically tries multiple API versions for compatibility.
-7. **Output** — Displays results in the console and optionally exports to CSV. Published apps produce one CSV row per deployment for granularity.
+7. **Output** — Displays results in the console and optionally exports to a timestamped CSV and/or styled Excel workbook. Published apps produce one row per deployment for granularity.
 
 ## Troubleshooting
 
@@ -129,7 +151,8 @@ Project: my-foundry-project
 | `No projects found` | Verify you have Reader access to subscriptions with AI Foundry resources. |
 | `401 Unauthorized` | Ensure you have the **Azure AI User** role on the project. Re-authenticate with `Connect-AzAccount`. |
 | `No data plane endpoint found` | The project may not have been fully provisioned. Check the project in the Azure portal. |
-| Missing modules error | Run `Install-Module -Name Az.Accounts, Az.ResourceGraph -Scope CurrentUser`. |
+| Missing modules error | Run `Install-Module -Name Az.Accounts, Az.ResourceGraph -Scope CurrentUser`. For Excel export also run `Install-Module -Name ImportExcel -Scope CurrentUser`. |
+| `-ExportExcel` errors with `Cannot find an overload for "SetColor"` | Make sure you're on the latest version of `ImportExcel` (`Update-Module ImportExcel`). |
 
 ## References & Documentation
 
